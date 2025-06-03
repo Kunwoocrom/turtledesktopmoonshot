@@ -2,7 +2,8 @@ import turtle
 
 t = turtle.Turtle()
 
-t.fd(100)
-t.rt(90)
+for i in range(5):
+    t.fd(100)
+    t.rt(108)
 
 turtle.done()
