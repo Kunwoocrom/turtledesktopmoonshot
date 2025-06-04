@@ -8,7 +8,6 @@ NUM_PARTICLES = 10 # 가상 참가자(입자) 수
 NUM_FIXED_OBJECTS = 5 # 고정된 개체(자본 축적기) 수
 SIMULATION_DURATION_SECONDS = 40 # 시뮬레이션 실행 시간 (초), 가상 40년
 
-
 # 재능 (입자의 속도) 분포 설정
 # 평균적인 재능을 가진 사람이 가장 많고, 재능이 매우 뛰어나거나 낮은 사람은 소수
 TALENT_MEAN = 3.0 # 재능의 평균
@@ -29,13 +28,19 @@ wn.setup(width=800, height=600) # 화면 크기 설정
 wn.bgcolor("black") # 배경색 검정
 wn.tracer(0) # 화면 업데이트 비활성화 (애니메이션 속도 향상)
 
+# 참가자에게 할당할 색상 목록 (10개)
+PARTICLE_COLORS = [
+    "white", "blue", "green", "purple", "orange",
+    "cyan", "magenta", "lime", "pink", "brown"
+]
+
 # --- 참가자 (입자) 클래스 ---
 class Participant:
-    def __init__(self, screen):
+    def __init__(self, screen, color_index): # color_index 인자 추가
         self.t = turtle.Turtle() # 참가자를 나타내는 터틀 객체
         self.t.speed(0) # 그리기 속도 최대로 설정
         self.t.shape("circle") # 원 모양
-        self.t.color("white") # 흰색
+        self.t.color(PARTICLE_COLORS[color_index]) # 인덱스를 사용하여 색상 할당
         self.t.penup() # 펜 들기 (이동 시 선을 그리지 않음)
         self.t.shapesize(stretch_wid=0.5, stretch_len=0.5) # 입자 크기 줄임 (기존 20x20 -> 10x10 픽셀)
         self.radius = 5 # 입자의 반지름 (shapesize 0.5x0.5 이므로 10x10의 절반)
@@ -49,7 +54,8 @@ class Participant:
         self.talent = random.gauss(TALENT_MEAN, TALENT_STD_DEV)
         self.speed = max(0.5, self.talent) # 속도는 재능에 비례하며, 최소 0.5 유지
 
-        self.collision_count = 0 # 자산: 고정된 개체와의 충돌 횟수
+        self.collision_points = 0.0 # 충돌 포인트 (부동 소수점 값 가능)
+        self.luck_points = 0 # 운 포인트
 
         # 운의 벽을 그릴 전용 터틀 객체 (각 참가자마다 하나씩)
         self.luck_wall_turtle = turtle.Turtle()
@@ -92,7 +98,16 @@ class Participant:
         # 모든 고정 개체를 순회하며 직접 충돌을 확인
         for f_obj in fixed_objects:
             if self.t.distance(f_obj.t) < f_obj.radius + self.radius:
-                self.collision_count += 1 # 자산 증가 (충돌 횟수)
+                # 충돌 포인트 증가량 결정
+                collision_increment = 1.0
+                if self.luck_points >= 15:
+                    collision_increment = 3.0
+                elif self.luck_points >= 10:
+                    collision_increment = 2.0
+                elif self.luck_points >= 5:
+                    collision_increment = 1.5
+
+                self.collision_points += collision_increment # 충돌 포인트 증가
                 self.t.setheading(self.t.heading() + 180) # 고정된 개체에서 반사
                 reflected_in_this_frame = True
                 break # 한 프레임에 하나의 고정 개체 충돌만 처리
@@ -117,11 +132,20 @@ class Participant:
                 self.active_luck_wall_for_fixed_object = current_fixed_object_in_range # 현재 접근 중인 고정 개체 설정
                 self.luck_wall_thickness = max(1, random.gauss(WALL_THICKNESS_MEAN, WALL_THICKNESS_STD_DEV))
 
-                # 운의 벽 위치 설정: 입자의 현재 이동 방향 바로 앞에 생성
-                self.luck_wall_turtle.goto(self.t.xcor(), self.t.ycor())
-                self.luck_wall_turtle.setheading(self.t.heading())
-                self.luck_wall_turtle.forward(self.radius + 5) # 입자 반지름 + 5픽셀 앞에 벽 배치
-                self.luck_wall_turtle.setheading(self.t.heading() + 90) # 입자 이동 방향에 수직으로 벽 방향 설정
+                # 운의 벽 위치 설정: 고정된 개체의 접근 반경에서 접선 방향으로 생성
+                # 1. 고정된 개체에서 입자로 향하는 각도 계산
+                angle_from_fixed_to_particle = current_fixed_object_in_range.t.towards(self.t)
+
+                # 2. 고정된 개체 중심에서 LUCK_WALL_DISTANCE_THRESHOLD만큼 떨어진 지점 계산
+                #    이 지점이 벽의 중심이 될 것임
+                wall_center_x = current_fixed_object_in_range.t.xcor() + LUCK_WALL_DISTANCE_THRESHOLD * math.cos(math.radians(angle_from_fixed_to_particle))
+                wall_center_y = current_fixed_object_in_range.t.ycor() + LUCK_WALL_DISTANCE_THRESHOLD * math.sin(math.radians(angle_from_fixed_to_particle))
+
+                self.luck_wall_turtle.goto(wall_center_x, wall_center_y)
+
+                # 3. 벽의 방향을 해당 지점에서 고정 개체 반경에 접선 방향으로 설정
+                #    (고정 개체에서 벽 중심까지의 선에 수직)
+                self.luck_wall_turtle.setheading(angle_from_fixed_to_particle + 90) # 또는 -90
 
                 self.luck_wall_turtle.shapesize(stretch_wid=0.05, stretch_len=self.luck_wall_thickness / 10.0)
                 self.luck_wall_turtle.showturtle()
@@ -142,6 +166,7 @@ class Participant:
                 prob_pass = (self.speed + 0.75 * self.luck_wall_thickness) / (self.speed + self.luck_wall_thickness)
 
                 if random.random() < prob_pass: # 운의 벽 통과 성공 (튕겨져 나오지 않음)
+                    self.luck_points += 1 # 운 포인트 1 증가
                     pass
                 else: # 운의 벽 통과 실패 (벽에 부딪혀 반사)
                     self.t.setheading(self.t.heading() + 180)
@@ -206,8 +231,8 @@ class CapitalAccumulator:
 def run_simulation():
     particles = []
     # NUM_PARTICLES 수만큼 참가자(입자) 생성
-    for _ in range(NUM_PARTICLES):
-        particles.append(Participant(wn))
+    for i in range(NUM_PARTICLES): # 인덱스를 사용하여 색상 할당
+        particles.append(Participant(wn, i))
 
     fixed_objects = []
     # 고정된 개체 위치 설정
@@ -219,6 +244,36 @@ def run_simulation():
     # NUM_FIXED_OBJECTS 수만큼 고정된 개체 생성
     for pos in fixed_positions[:NUM_FIXED_OBJECTS]:
         fixed_objects.append(CapitalAccumulator(wn, pos[0], pos[1]))
+
+    # --- 정보 표시 터틀 설정 ---
+    info_display_turtle = turtle.Turtle()
+    info_display_turtle.speed(0)
+    info_display_turtle.penup()
+    info_display_turtle.hideturtle()
+    info_display_turtle.color("lightgray") # 텍스트 색상
+
+    # --- 초기 정보 표시 ---
+    display_info_y = 280 # 정보 표시 시작 Y 좌표
+    info_display_turtle.goto(250, display_info_y) # 오른쪽 상단 위치
+    info_display_turtle.write("참가자 정보:", align="left", font=("Arial", 10, "bold"))
+    display_info_y -= 20 # 다음 줄을 위해 Y 좌표 이동
+
+    for i, particle in enumerate(particles):
+        # 색상 표시
+        info_display_turtle.goto(250, display_info_y + 4) # 색상 사각형 위치 조정
+        info_display_turtle.pendown()
+        info_display_turtle.fillcolor(PARTICLE_COLORS[i])
+        info_display_turtle.begin_fill()
+        for _ in range(4):
+            info_display_turtle.forward(10)
+            info_display_turtle.right(90)
+        info_display_turtle.end_fill()
+        info_display_turtle.penup()
+
+        # 속도(재능) 텍스트 표시
+        info_display_turtle.goto(265, display_info_y) # 텍스트 위치 조정
+        info_display_turtle.write(f"속도(재능): {particle.speed:.2f}", align="left", font=("Arial", 8, "normal"))
+        display_info_y -= 15 # 줄 간격 조정
 
     start_time = time.time() # 시뮬레이션 시작 시간 기록
     frame_count = 0 # 프레임 카운터
@@ -241,16 +296,16 @@ def run_simulation():
     print("\n--- 시뮬레이션 종료 ---")
     print(f"총 프레임 수: {frame_count}")
 
-    # 자산 (충돌 횟수) 기준으로 참가자 정렬 (내림차순)
-    particles.sort(key=lambda p: p.collision_count, reverse=True)
+    # 충돌 포인트 기준으로 참가자 정렬 (내림차순)
+    particles.sort(key=lambda p: p.collision_points, reverse=True)
 
     print("\n--- 상위 10명의 참가자 ---")
     for i, p in enumerate(particles[:10]):
-        print(f"{i+1}. 재능: {p.talent:.2f}, 자산(충돌 횟수): {p.collision_count}")
+        print(f"{i+1}. 재능: {p.talent:.2f}, 운 포인트: {p.luck_points}, 충돌 포인트: {p.collision_points:.2f}")
 
     print("\n--- 하위 10명의 참가자 ---")
     for i, p in enumerate(particles[-10:]):
-        print(f"{i+1}. 재능: {p.talent:.2f}, 자산(충돌 횟수): {p.collision_count}")
+        print(f"{i+1}. 재능: {p.talent:.2f}, 운 포인트: {p.luck_points}, 충돌 포인트: {p.collision_points:.2f}")
 
     # 모든 터틀 객체 정리 (화면에서 숨기고 그림 지우기)
     for p in particles:
