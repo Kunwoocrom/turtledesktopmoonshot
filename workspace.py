@@ -306,7 +306,6 @@ def run_simulation():
     print("\n--- 하위 10명의 참가자 ---")
     for i, p in enumerate(particles[-10:]):
         print(f"{i+1}. 재능: {p.talent:.2f}, 운 포인트: {p.luck_points}, 충돌 포인트: {p.collision_points:.2f}")
-
     # 모든 터틀 객체 정리 (화면에서 숨기고 그림 지우기)
     for p in particles:
         p.t.hideturtle()
