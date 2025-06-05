@@ -6,7 +6,7 @@ import time
 # --- 시뮬레이션 설정 ---
 NUM_PARTICLES = 20  # 가상 참가자(입자) 수 (20개로 증가)
 NUM_FIXED_OBJECTS = 6  # 고정된 개체(자본 축적기) 수 (6개로 증가)
-SIMULATION_DURATION_SECONDS = 70  # 시뮬레이션 실행 시간 (초), 가상 40년 -> 70년으로 변경
+SIMULATION_DURATION_SECONDS = 300  # 시뮬레이션 실행 시간 (초), 가상 40년 -> 70년으로 변경
 
 # 재능 (입자의 속도) 분포 설정
 # 평균적인 재능을 가진 사람이 가장 많고, 재능이 매우 뛰어나거나 낮은 사람은 소수
