@@ -4,23 +4,28 @@ import math
 import time
 
 # --- 시뮬레이션 설정 ---
-NUM_PARTICLES = 10 # 가상 참가자(입자) 수
-NUM_FIXED_OBJECTS = 5 # 고정된 개체(자본 축적기) 수
+NUM_PARTICLES = 20 # 가상 참가자(입자) 수 (20개로 증가)
+NUM_FIXED_OBJECTS = 6 # 고정된 개체(자본 축적기) 수 (6개로 증가)
 SIMULATION_DURATION_SECONDS = 40 # 시뮬레이션 실행 시간 (초), 가상 40년
 
 # 재능 (입자의 속도) 분포 설정
 # 평균적인 재능을 가진 사람이 가장 많고, 재능이 매우 뛰어나거나 낮은 사람은 소수
-TALENT_MEAN = 3.0 # 재능의 평균
+TALENT_MEAN = 5.0 # 재능의 평균 (3.0 -> 5.0으로 변경)
 TALENT_STD_DEV = 1.0 # 재능의 표준 편차
 
 # 운의 벽 두께 분포 설정
 # 운의 벽이 두꺼울수록 통과하기 어려움
 WALL_THICKNESS_MEAN = 10.0 # 운의 벽 두께 평균
 WALL_THICKNESS_STD_DEV = 3.0 # 운의 벽 두께 표준 편차
-LUCK_WALL_DISTANCE_THRESHOLD = 40 # 고정된 개체에 얼마나 가까이 접근해야 운의 벽이 생기는가 (픽셀, 2cm 반경)
+# 고정된 개체 반지름(20) + 0.5cm(10픽셀) = 30픽셀 (0.4cm 증가)
+LUCK_WALL_DISTANCE_THRESHOLD = 30 # 고정된 개체에 얼마나 가까이 접근해야 운의 벽이 생기는가 (픽셀)
 
-# 고정된 개체의 시각적 접근 반경 (2cm에 해당)
-FIXED_OBJECT_APPROACH_RADIUS = 40
+# 고정된 개체의 시각적 접근 반경 (고정 개체 반지름 + 0.5cm)
+FIXED_OBJECT_APPROACH_RADIUS = 30
+
+# 운의 벽 통과 확률 조절 (값이 낮아질수록 통과하기 어려워짐)
+# 이 값은 통과 확률의 최소값에 영향을 줍니다. (예: 0.75면 최소 75%)
+LUCK_PASS_FACTOR = 0.75 # 벽 통과 확률을 원래대로 0.75로 설정
 
 # --- 화면 설정 ---
 wn = turtle.Screen()
@@ -28,10 +33,12 @@ wn.setup(width=800, height=600) # 화면 크기 설정
 wn.bgcolor("black") # 배경색 검정
 wn.tracer(0) # 화면 업데이트 비활성화 (애니메이션 속도 향상)
 
-# 참가자에게 할당할 색상 목록 (10개)
+# 참가자에게 할당할 색상 목록 (20개로 늘어난 개체 수에 맞춰 색상 추가)
 PARTICLE_COLORS = [
     "white", "blue", "green", "purple", "orange",
-    "cyan", "magenta", "lime", "pink", "brown"
+    "cyan", "magenta", "lime", "pink", "brown",
+    "red", "gold", "silver", "teal", "navy",
+    "olive", "maroon", "coral", "indigo", "violet"
 ]
 
 # --- 참가자 (입자) 클래스 ---
@@ -50,9 +57,9 @@ class Participant:
         # 초기 방향 랜덤 설정
         self.t.setheading(random.uniform(0, 360))
 
-        # 재능 (속도) 설정: 정규 분포를 따르며, 최소 속도를 보장
+        # 재능 (속도) 설정: 정규 분포를 따르며, 최소 1.0, 최대 10.0을 보장
         self.talent = random.gauss(TALENT_MEAN, TALENT_STD_DEV)
-        self.speed = max(0.5, self.talent) # 속도는 재능에 비례하며, 최소 0.5 유지
+        self.speed = max(1.0, min(10.0, self.talent)) # 속도는 재능에 비례하며, 최소 1.0, 최대 10.0 유지
 
         self.collision_points = 0.0 # 충돌 포인트 (부동 소수점 값 가능)
         self.luck_points = 0 # 운 포인트
@@ -137,7 +144,7 @@ class Participant:
                 angle_from_fixed_to_particle = current_fixed_object_in_range.t.towards(self.t)
 
                 # 2. 고정된 개체 중심에서 LUCK_WALL_DISTANCE_THRESHOLD만큼 떨어진 지점 계산
-                #    이 지점이 벽의 중심이 될 것임
+                #    이 지점이 벽의 중심이 될 것임 (접근 반경의 원주)
                 wall_center_x = current_fixed_object_in_range.t.xcor() + LUCK_WALL_DISTANCE_THRESHOLD * math.cos(math.radians(angle_from_fixed_to_particle))
                 wall_center_y = current_fixed_object_in_range.t.ycor() + LUCK_WALL_DISTANCE_THRESHOLD * math.sin(math.radians(angle_from_fixed_to_particle))
 
@@ -147,7 +154,8 @@ class Participant:
                 #    (고정 개체에서 벽 중심까지의 선에 수직)
                 self.luck_wall_turtle.setheading(angle_from_fixed_to_particle + 90) # 또는 -90
 
-                self.luck_wall_turtle.shapesize(stretch_wid=0.05, stretch_len=self.luck_wall_thickness / 10.0)
+                # 운의 벽 두께를 더 잘 보이도록 조정 (원래 0.05 -> 0.25로 변경)
+                self.luck_wall_turtle.shapesize(stretch_wid=0.25, stretch_len=self.luck_wall_thickness / 10.0)
                 self.luck_wall_turtle.showturtle()
                 self.luck_wall_turtle.color("yellow")
         else: # 입자가 어떤 고정 개체의 범위 내에도 있지 않은 경우
@@ -160,10 +168,11 @@ class Participant:
         # 이 프레임에서 고정 개체에 의해 반사되지 않았을 때만 운의 벽 충돌을 확인
         if not reflected_in_this_frame and self.luck_wall_turtle.isvisible() and self.active_luck_wall_for_fixed_object is not None:
             # 운의 벽과 충돌했는지 확인
-            # 벽의 실제 폭은 20 * 0.05 = 1 픽셀. 절반 폭은 0.5 픽셀.
-            if self.t.distance(self.luck_wall_turtle) < self.radius + 0.5:
+            # 벽의 실제 폭은 20 * 0.25 = 5 픽셀. 절반 폭은 2.5 픽셀.
+            if self.t.distance(self.luck_wall_turtle) < self.radius + 2.5: # 반지름 + 벽의 절반 폭
                 # 운의 벽을 통과할 확률 계산 (이 확률은 '기회 활용'의 개념)
-                prob_pass = (self.speed + 0.75 * self.luck_wall_thickness) / (self.speed + self.luck_wall_thickness)
+                # LUCK_PASS_FACTOR를 사용하여 전체적인 확률을 조절합니다.
+                prob_pass = (self.speed + LUCK_PASS_FACTOR * self.luck_wall_thickness) / (self.speed + self.luck_wall_thickness)
 
                 if random.random() < prob_pass: # 운의 벽 통과 성공 (튕겨져 나오지 않음)
                     self.luck_points += 1 # 운 포인트 1 증가
@@ -208,8 +217,8 @@ class CapitalAccumulator:
         self.t.speed(0)
         self.t.shape("circle") # 원 모양
         self.t.color("red") # 빨간색
-        self.t.shapesize(stretch_wid=0.5, stretch_len=0.5) # 지름 0.5cm에 해당하는 크기 (10x10 픽셀)
-        self.radius = 5 # 고정 개체의 반지름 (shapesize 0.5x0.5 이므로 10x10의 절반)
+        self.t.shapesize(stretch_wid=2.0, stretch_len=2.0) # 지름 2cm에 해당하는 크기 (40x40 픽셀)
+        self.radius = 20 # 고정 개체의 반지름 (shapesize 2.0x2.0 이므로 40x40의 절반)
         self.t.penup()
         self.t.goto(x, y) # 지정된 위치로 이동
 
@@ -235,11 +244,12 @@ def run_simulation():
         particles.append(Participant(wn, i))
 
     fixed_objects = []
-    # 고정된 개체 위치 설정
+    # 고정된 개체 위치 설정 (6개로 증가)
     fixed_positions = [
         (-200, 150), (200, 150),
         (-200, -150), (200, -150),
-        (0, 0)
+        (0, 0),
+        (0, -250) # 추가된 6번째 고정 개체 위치
     ]
     # NUM_FIXED_OBJECTS 수만큼 고정된 개체 생성
     for pos in fixed_positions[:NUM_FIXED_OBJECTS]:
@@ -306,6 +316,7 @@ def run_simulation():
     print("\n--- 하위 10명의 참가자 ---")
     for i, p in enumerate(particles[-10:]):
         print(f"{i+1}. 재능: {p.talent:.2f}, 운 포인트: {p.luck_points}, 충돌 포인트: {p.collision_points:.2f}")
+
     # 모든 터틀 객체 정리 (화면에서 숨기고 그림 지우기)
     for p in particles:
         p.t.hideturtle()
@@ -323,3 +334,6 @@ def run_simulation():
 # 시뮬레이션 실행
 if __name__ == "__main__":
     run_simulation()
+
+
+
